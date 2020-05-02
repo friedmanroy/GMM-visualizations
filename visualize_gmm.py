@@ -5,7 +5,7 @@ from matplotlib.patches import Ellipse
 from matplotlib.axes._axes import _log as matplotlib_axes_logger
 matplotlib_axes_logger.setLevel('ERROR')
 import argparse
-from GMM import GMM
+from models.GMM import GMM
 
 parser = argparse.ArgumentParser(description='Visualizes how a GMM converges and how it is trained')
 

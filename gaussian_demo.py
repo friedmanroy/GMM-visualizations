@@ -1,7 +1,7 @@
 import numpy as np
 from mosaic import mosaic
 from matplotlib import pyplot as plt
-from classGMM import pPCA_cGMM as classGMM
+from models.classGMM import pPCA_cGMM as classGMM
 
 
 def gen_labeled(N, n_shapes: int=5, im_sz: int=20, sqr_size: int=7, bg_mean: float=.2, fg_mean: float=.8,

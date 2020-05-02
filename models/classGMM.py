@@ -1,5 +1,5 @@
 import numpy as np
-from pPCA import pPCA
+from models.pPCA import pPCA
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal as MVN
 from typing import Union

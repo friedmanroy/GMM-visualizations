@@ -9,4 +9,4 @@ Using the following line:
 python visualize_gmm.py -k 5 -m 5
 ```
 You can get a result similar to the following:
-![Demo GMM](https://github.com/friedroy/gaussians/blob/master/demo.gif)
+![Demo GMM](https://github.com/friedroy/gaussians/blob/master/examples/demo.gif)

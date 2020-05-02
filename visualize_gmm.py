@@ -19,8 +19,8 @@ parser.add_argument('-N', type=int, default=1000,
                     help='number of data points to generate (default: 1000')
 parser.add_argument('--max_radius', type=float, default=10,
                     help='max radius that the means will lie in (default: 10')
-parser.add_argument('-s', '--save_path', type=str, default='gmm_vid.mp4',
-                    help='where the fitting video will be saved (default: gmm_vid.mp4)')
+parser.add_argument('-s', '--save_path', type=str, default='gmm_vid.gif',
+                    help='where the fitting video will be saved (default: gmm_vid.gif)')
 parser.add_argument('--fps', type=int, default=5,
                     help='frames per second of the video (default: 5')
 parser.add_argument('--load_path', type=str, default='',
@@ -102,7 +102,7 @@ ylims = [mid[1]-dist[1], mid[1]+dist[1]]
 gmm = GMM(k)
 
 # create the writer
-FFMpegWriter = manimation.writers['ffmpeg']
+FFMpegWriter = manimation.writers['imagemagick']
 metadata = dict(title='GMM fitting visualization', artist='')
 writer = FFMpegWriter(fps=args.fps, metadata=metadata)
 

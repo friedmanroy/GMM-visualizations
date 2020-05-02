@@ -25,29 +25,38 @@ parser.add_argument('--fps', type=int, default=5,
                     help='frames per second of the video (default: 5')
 parser.add_argument('--load_path', type=str, default='',
                     help='load data (as a .npy file) and fit GMM to that data')
-parser.add_argument('--print_ll', action='store_false',
+parser.add_argument('--print_ll', action='store_true',
                     help='whether to print the average log-likelihood each iteration (default: False)')
 parser.add_argument('--show_clusters', action='store_false',
                     help='whether to plot the Gaussians or not (default: True)')
 
-colors = plt.get_cmap('tab20').colors
+colors = plt.get_cmap('Set1').colors
+
+
+def get_ellipse(mean, cov, color, linestyle='-'):
+    v, w = np.linalg.eigh(cov)
+    ang = 180. * np.arctan2(w[0, 1], w[0, 0]) / np.pi
+    v = 2 * np.sqrt(2) * np.sqrt(v)
+    return Ellipse(mean, v[0], v[1], 180 + ang, lw=2, facecolor='None',
+                   edgecolor=color, linestyle=linestyle)
 
 
 def create_frame():
     gca = plt.gca()
     res = np.array(gmm.predict(X))
+
+    if len(mu) > 0:
+        for i in range(len(mu)):
+            gca.add_patch(get_ellipse(rmu[i], rcov[i], [0.7, 0.7, 0.7], '--'))
+
     for i in range(k):
         inds = res == i
         if np.any(inds):
             plt.scatter(X[inds, 0], X[inds, 1], 10, c=colors[i], alpha=.5, marker='.')
             if args.show_clusters:
                 plt.plot(gmm.mu[i, 0], gmm.mu[i, 1], marker='+', markersize=5, color=colors[i])
-                v, w = np.linalg.eigh(gmm.cov[i])
-                ang = 180. * np.arctan2(w[0, 1], w[0, 0]) / np.pi
-                v = 2*np.sqrt(2)*np.sqrt(v)
-                e = Ellipse(gmm.mu[i], v[0], v[1], 180 + ang, lw=2, facecolor='None',
-                            edgecolor=colors[i])
-                gca.add_patch(e)
+                gca.add_patch(get_ellipse(gmm.mu[i], gmm.cov[i], colors[i]))
+
     plt.xlim(xlims)
     plt.ylim(ylims)
 
@@ -58,6 +67,8 @@ k = args.num_clusters
 its = args.iterations
 
 # load/create data to fit to
+rmu = []
+rcov = []
 if args.load_path != '':
     X = np.load(args.load_path)
 else:
@@ -71,6 +82,7 @@ else:
     covs = covs @ covs.transpose((0, 2, 1))
     covs += 0.1*np.eye(2)[None, ...]
 
+    rmu, rcov = mu, covs
     split = np.random.rand(args.means)
     split = np.ceil(args.N*split/np.sum(split))
     split = [0] + [min(int(np.sum(split[:i+1])), args.N) for i in range(len(split))]
@@ -79,9 +91,10 @@ else:
     for i in range(args.means):
         X[split[i]:split[i+1]] = np.random.multivariate_normal(mean=mu[i], cov=covs[i], size=split[i+1]-split[i])
 
+
 # define axes limits
 mid = np.mean(X, axis=0)
-dist = 1.25*np.max(X-mid, axis=0)
+dist = 1.25*np.sqrt(np.max((X-mid)**2, axis=0))
 xlims = [mid[0]-dist[0], mid[0]+dist[0]]
 ylims = [mid[1]-dist[1], mid[1]+dist[1]]
 
@@ -94,7 +107,7 @@ metadata = dict(title='GMM fitting visualization', artist='')
 writer = FFMpegWriter(fps=args.fps, metadata=metadata)
 
 # write frames
-fig = plt.figure()
+fig = plt.figure(dpi=200)
 with writer.saving(fig, args.save_path, 100):
     for i in range(its):
         gmm = gmm.fit(X, iterations=1, verbose=False)

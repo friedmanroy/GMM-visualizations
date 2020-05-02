@@ -1,7 +1,7 @@
 import numpy as np
 from mosaic import mosaic
 from matplotlib import pyplot as plt
-from classGMM import classGMM
+from classGMM import pPCA_cGMM as classGMM
 
 
 def gen_labeled(N, n_shapes: int=5, im_sz: int=20, sqr_size: int=7, bg_mean: float=.2, fg_mean: float=.8,
@@ -136,10 +136,62 @@ def squares_demo(N: int, bg_mean: float=.2, fg_mean: float=.8,
     plt.show()
 
 
+def demo_MNIST(latent: int=50):
+    from keras.datasets import mnist
+    (X_train, y_train), (X_test, y_test) = mnist.load_data()
+
+    print(X_train.shape, X_test.shape)
+    print(np.unique(y_train), np.unique(y_test))
+
+    gmm = classGMM(latent_dim=latent).fit(X_train, y_train)
+    print('cGMM trained with mix:', gmm.mix)
+    print('Avg. train accuracy:', gmm.score(X_train, y_train))
+    print('Avg. test accuracy:', gmm.score(X_test, y_test))
+
+    plt.figure(dpi=300)
+    plt.subplot(121)
+    plt.imshow(mosaic(X_train[:49]), cmap='gray')
+    plt.axis('off')
+    plt.title('original data')
+    plt.subplot(122)
+    plt.imshow(mosaic(gmm.generate(49)), cmap='gray')
+    plt.axis('off')
+    plt.title('generated data')
+    plt.tight_layout()
+
+    preds = gmm.predict(X_test)
+    plt.figure(dpi=300)
+    for i in range(25):
+        plt.subplot(5, 5, i + 1)
+        plt.imshow(X_test[i], cmap='gray')
+        plt.axis('off')
+        plt.title('lab: {}, pred: {}'.format(y_test[i], preds[i]))
+    plt.tight_layout()
+
+    plt.figure(dpi=300)
+    for i in range(10):
+        cls = mosaic(X_train[y_train == i][:10], cols=1)
+        plt.subplot(1, 2 * 10, 2 * (i + 1) - 1)
+        plt.imshow(cls, cmap='gray')
+        plt.axis('off')
+
+        cls = mosaic(gmm.generate(10, label=i), cols=1)
+        plt.subplot(1, 2 * 10, 2 * (i + 1))
+        plt.imshow(cls, cmap='gray')
+        plt.axis('off')
+    plt.tight_layout()
+
+    plt.show()
+
+
 # simple MVN demo
-# squares_demo(100)
+squares_demo(1000)
 
 # low rank MVN demo
-# squares_demo(100, fg_std=np.array([0, 0, 0]))
+squares_demo(1000, fg_std=np.array([0, 0, 0]))
 
-classifier_demo(1000, 3, .9, 2)
+# demo for class-GMM
+classifier_demo(60000, 3, .9, 5)
+
+# demo using MNIST
+demo_MNIST(10)

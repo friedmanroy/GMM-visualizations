@@ -21,13 +21,13 @@ parser.add_argument('--max_radius', type=float, default=10,
                     help='max radius that the means will lie in (default: 10')
 parser.add_argument('-s', '--save_path', type=str, default='gmm_vid.gif',
                     help='where the fitting video will be saved (default: gmm_vid.gif)')
-parser.add_argument('--fps', type=int, default=5,
+parser.add_argument('--fps', type=int, default=7,
                     help='frames per second of the video (default: 5')
 parser.add_argument('--load_path', type=str, default='',
                     help='load data (as a .npy file) and fit GMM to that data')
 parser.add_argument('--print_ll', action='store_true',
                     help='whether to print the average log-likelihood each iteration (default: False)')
-parser.add_argument('--show_clusters', action='store_false',
+parser.add_argument('--hide_clusters', action='store_true',
                     help='whether to plot the Gaussians or not (default: True)')
 
 colors = plt.get_cmap('Set1').colors
@@ -41,21 +41,23 @@ def get_ellipse(mean, cov, color, linestyle='-'):
                    edgecolor=color, linestyle=linestyle)
 
 
-def create_frame():
+def create_frame(it: int):
     gca = plt.gca()
+    plt.text(xlims[0], ylims[1], "iter {}/{}".format(it+1, its), horizontalalignment='left',
+             verticalalignment='top')
     res = np.array(gmm.predict(X))
 
-    if len(mu) > 0:
-        for i in range(len(mu)):
+    if len(rmu) > 0:
+        for i in range(len(rmu)):
             gca.add_patch(get_ellipse(rmu[i], rcov[i], [0.7, 0.7, 0.7], '--'))
 
-    for i in range(k):
-        inds = res == i
+    for clust in range(k):
+        inds = res == clust
         if np.any(inds):
-            plt.scatter(X[inds, 0], X[inds, 1], 10, c=colors[i], alpha=.5, marker='.')
-            if args.show_clusters:
-                plt.plot(gmm.mu[i, 0], gmm.mu[i, 1], marker='+', markersize=5, color=colors[i])
-                gca.add_patch(get_ellipse(gmm.mu[i], gmm.cov[i], colors[i]))
+            plt.scatter(X[inds, 0], X[inds, 1], 10, c=colors[clust%len(colors)], alpha=.5, marker='.')
+        if not args.hide_clusters:
+            plt.plot(gmm.mu[clust, 0], gmm.mu[clust, 1], marker='+', markersize=5, color=colors[clust%len(colors)])
+            gca.add_patch(get_ellipse(gmm.mu[clust], gmm.cov[clust], colors[clust%len(colors)]))
 
     plt.xlim(xlims)
     plt.ylim(ylims)
@@ -69,8 +71,7 @@ its = args.iterations
 # load/create data to fit to
 rmu = []
 rcov = []
-if args.load_path != '':
-    X = np.load(args.load_path)
+if args.load_path != '': X = np.load(args.load_path)
 else:
     theta = np.random.rand(args.means)*2*np.pi
     r = (.85*np.random.rand(args.means) + .15)*args.max_radius
@@ -107,12 +108,12 @@ metadata = dict(title='GMM fitting visualization', artist='')
 writer = FFMpegWriter(fps=args.fps, metadata=metadata)
 
 # write frames
-fig = plt.figure(dpi=200)
+fig = plt.figure()
 with writer.saving(fig, args.save_path, 100):
     for i in range(its):
         gmm = gmm.fit(X, iterations=1, verbose=False)
         if args.print_ll: print("The average log-likelihood for iteration {}/{} was {:.3f}"
                                 .format(i+1, its, np.mean(gmm.log_likelihood(X))), flush=True)
         plt.clf()
-        create_frame()
+        create_frame(i)
         writer.grab_frame()

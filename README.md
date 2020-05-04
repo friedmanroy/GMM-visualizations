@@ -20,7 +20,7 @@ python visualize_gmm.py -k <choose number of clusters> --load_path <your .npy fi
 ```
 You can add the flag ```--print_ll``` to track progress. An example of how to load data:
 ```bash
-python visualize_gmm.py -k 20 --load_path examples\circles.npy --print_ll -i 100 --fps 15
+python visualize_gmm.py -k 20 --load_path examples/circles.npy --print_ll -i 100 --fps 15
 ```
 The result should be something similar to:
 ![Demo Circles](https://github.com/friedroy/gaussians/blob/master/examples/circles.gif)

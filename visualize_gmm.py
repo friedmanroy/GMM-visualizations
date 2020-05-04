@@ -21,14 +21,18 @@ parser.add_argument('--max_radius', type=float, default=10,
                     help='max radius that the means will lie in (default: 10')
 parser.add_argument('-s', '--save_path', type=str, default='gmm_vid.gif',
                     help='where the fitting video will be saved (default: gmm_vid.gif)')
-parser.add_argument('--fps', type=int, default=7,
+parser.add_argument('--fps', type=int, default=10,
                     help='frames per second of the video (default: 5')
 parser.add_argument('--load_path', type=str, default='',
                     help='load data (as a .npy file) and fit GMM to that data')
 parser.add_argument('--print_ll', action='store_true',
                     help='whether to print the average log-likelihood each iteration (default: False)')
-parser.add_argument('--hide_clusters', action='store_true',
-                    help='whether to plot the Gaussians or not (default: True)')
+parser.add_argument('--hide_covs', action='store_true',
+                    help='whether to hide the fitted Gaussians covariances or not (default: False)')
+parser.add_argument('--hide_means', action='store_true',
+                    help='whether to hide the fitted Gaussians means or not (default: False)')
+parser.add_argument('--hide_real', action='store_true',
+                    help='whether to hide the true Gaussian placements or not (default: False)')
 
 colors = plt.get_cmap('Set1').colors
 
@@ -47,7 +51,7 @@ def create_frame(it: int):
              verticalalignment='top')
     res = np.array(gmm.predict(X))
 
-    if len(rmu) > 0:
+    if len(rmu) > 0 and not args.hide_real:
         for i in range(len(rmu)):
             gca.add_patch(get_ellipse(rmu[i], rcov[i], [0.7, 0.7, 0.7], '--'))
 
@@ -55,8 +59,9 @@ def create_frame(it: int):
         inds = res == clust
         if np.any(inds):
             plt.scatter(X[inds, 0], X[inds, 1], 10, c=colors[clust%len(colors)], alpha=.5, marker='.')
-        if not args.hide_clusters:
+        if not args.hide_means:
             plt.plot(gmm.mu[clust, 0], gmm.mu[clust, 1], marker='+', markersize=5, color=colors[clust%len(colors)])
+        if not args.hide_covs:
             gca.add_patch(get_ellipse(gmm.mu[clust], gmm.cov[clust], colors[clust%len(colors)]))
 
     plt.xlim(xlims)

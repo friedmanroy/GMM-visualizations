@@ -26,7 +26,7 @@ What are we seeing here? This is an animation of the optimization process for a 
 One thing that really stands out is that this animation looks almost exactly like the optimization process for _k_-means; in fact, it becomes even more similar when you don't plot the ellipses (the covariances). You can see for yourself by using the flag `--hide_covs` together with `--hide_real`, in the following line: `python visualize_gmm.py -k 5 -m 5 --hide_covs --hide_real`. So why does it look so much like _k_-means? That's because _k_-means is also fitted using a (sort of) EM algorithm! In fact, the GMM is a sort of generalized _k_-means; instead of simply finding the centers of mass of each cluster, we also say that they are distributed in some manner. The big advantage over _k_-means is that we now actually hold the distribution itself, and can generate new points from it or ask how likely it is to see a point in any place around the space.
 
 ### Fitting a GMM to a more complex distribution
-Any 2D data, saved as numpy ndarray in a `.npy` file, with shape \[N, 2\] can also be fitted to a GMM, using this tool; the following line demonstrates how:
+Any 2D data, saved as a numpy ndarray in a `.npy` file with shape \[N, 2\], can also be fitted to a GMM using this tool; the following line demonstrates how:
 ```bash
 python visualize_gmm.py -k <choose number of clusters> --load_path <your .npy file path here> [--print_ll]
 ```

@@ -19,9 +19,9 @@ class GMM:
         self._inited = False
         self.__prec = 10e-6
 
-    def __str__(self): return 'GMM_k{}'
+    def __str__(self): return 'GMM_k{}'.format(self.k)
 
-    def __repr__(self): return 'GMM_k{}'
+    def __repr__(self): return 'GMM_k{}'.format(self.k)
 
     def __check_X(self, X: np.ndarray):
         assert X.ndim == 2
@@ -67,7 +67,7 @@ class GMM:
             self._inited = True
         else: self.__check_X(X)
 
-        if verbose: print('Fitting a class-GMM model to {} samples with {} clusters, for {} iterations:'
+        if verbose: print('Fitting a GMM model to {} samples with {} clusters, for {} iterations:'
                           .format(X.shape[0], self.k, iterations), flush=True)
         for _ in tqdm.tqdm(range(iterations), disable=not verbose):
             res = self.responsibilities(X, log=True)

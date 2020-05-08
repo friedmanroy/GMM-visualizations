@@ -84,7 +84,7 @@ class GMM:
     def logdet(self) -> np.ndarray:
         return self._d*np.log(self.phi[:, None, None]) - np.log(self.M)
 
-    def fit(self, X: np.ndarray, iterations: int=10, verbose: bool=True):
+    def fit(self, X: np.ndarray, iterations: int=10, verbose: bool=True, save_mem: bool=False):
         """
         Fit a GMM to the given datapoints
         :param X: the data to fit to, as a numpy array with shape [# samples, ...]
@@ -99,28 +99,50 @@ class GMM:
         if verbose: print('Fitting a pPCAMM model to {} samples with {} clusters, for {} iterations:'
                           .format(X.shape[0], self.k, iterations), flush=True)
         for _ in tqdm.tqdm(range(iterations), disable=not verbose):
-            res = self.responsibilities(X, log=True)
+            res = self.responsibilities(X, log=True, save_mem=save_mem)
             norm = np.exp(logsumexp(res, axis=1))
             res = np.exp(res)
 
             self.mix = np.maximum(np.sum(res, axis=1)/X.shape[0], self.__prec)
             self.mix = self.mix / np.sum(self.mix)
-            for k in range(self.k):
-                self.mu[k] = np.sum(res[k, :, None]*X, axis=0)/norm[k]
+
+            if not save_mem:
+                self.mu = np.sum(res[..., None] *
+                                 (self.__transp(X[None, :, :]) -
+                                  self.M@self.__transp(self.W)@(self.__transp(X[None, :, :])-self.mu[:, :, None])),
+                                 axis=2) / norm
+                meaned = X[None, :] - self.mu[:, None, :]
+                cov = ((res[:, :, None] * (self.__transp(meaned))) @ (meaned @ self.W))/norm[:, None]
+                self.W = cov @ np.linalg.inv(self.M @ self.__transp(self.W) @ cov +
+                                             np.eye(self.q)[None, :, :]*self.phi[:, None])
+                self.phi = (np.sum((res[:, :, None] * meaned @ self.__transp(meaned)) /norm[:, None], axis=1) - \
+                            np.sum(self.__transp(self.W) * (cov @ self.M), axis=(1, 2))) / self._d
+            else:
+                for k in range(self.k):
+                    self.mu[k] = np.sum(res[k, :, None] * (X.T - self.M[k] @ self.W[k].T @ (X.T - self.mu[k, :, None])),
+                                        axis=1) / norm[k]
+                    meaned = X - self.mu[k, None, :]
+                    cov = ((res[k, :, None] * meaned.T) @ (meaned @ self.W[k])) / norm[k, None]
+                    self.W[k] = cov @ np.linalg.inv(self.M[k] @ self.W[k].T @ cov + np.eye(self.q)*self.phi[k])
+                    self.phi[k] = (np.sum(meaned.T @ (res * meaned))/norm[k] - \
+                                   np.sum(self.W[k].T * (cov @ self.M[k]))) / self._d
+            self.__update_M()
+            self.phi = np.maximum(self.phi, self.__prec)
 
         self._trained = True
         return self
 
-    def generate(self, N: int, return_labels: bool=False, clust: int=None):
+    def generate(self, N: int, return_labels: bool=False, clust: int=None, noise_free: bool=True):
         """
         Generate data from the trained model
         :param N: the number of samples to generate
         :param return_labels: whether the model should return the class labels for the generated data or not
         :param clust: the cluster to generate the samples from. If no cluster is supplied, each generated data point
                       will be sampled according to the mixing probabilities
+        :param noise_free: if this is set to False the spherical noise component will be added to the generated samples
         :return: if return_labels is set to False, the return value will be a ndarray with shape [N, ...] of generated
                  samples. If return_labels is set to True, in addition to the first output a ndarray with shape [N,]
-                 will be outputed, with the labels that match the generated samples
+                 will be outputted, with the labels that match the generated samples
         """
         assert self._trained, "Model must be trained before trying to generate data from it"
         if clust is None: chosen = np.random.choice(self.k, N, replace=True, p=self.mix)
@@ -128,11 +150,10 @@ class GMM:
             assert clust < self.k
             chosen = np.ones(N)*clust
         labs = [c for c in chosen]
-        gen = []
-        for c in chosen:
-            gen.append(np.random.multivariate_normal(mean=self.mu[c], cov=self.cov[c], size=1)[0])
-        if return_labels: return np.array(gen, copy=False), labs
-        return np.array(gen, copy=False)
+        gen = (self.W[chosen, :, :] @ np.random.randn(N, self.q, 1))[:, :, 0] + self.mu[chosen, :]
+        if not noise_free: gen += self.phi[chosen]*np.random.randn(N, self._d)
+        if return_labels: return gen.reshape([N] + list(self._shape)), labs
+        return gen.reshape([N] + list(self._shape))
 
     def log_likelihood(self, X: np.ndarray, save_mem: bool=False):
         X = self.__check_reshape_X(X)

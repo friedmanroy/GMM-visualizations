@@ -5,9 +5,9 @@ from typing import Union
 from models.pPCA import pPCA
 
 
-class GMM:
+class pPCAMM:
 
-    def __init__(self, k: int=10, latent_dim: int=10):
+    def __init__(self, k: int=10, latent_dim: int=10, no_reshaping: bool=False):
         """
         Initialize a probabilistic PCA model with the given latent dimension
         :param latent_dim: an int depicting the latent dimension the model should learn
@@ -24,6 +24,7 @@ class GMM:
         self._trained = False
         self._inited = False
         self.__prec = 10e-6
+        self.__reshape = not no_reshaping
 
     def __str__(self): return 'pPCAMM_k{}_q{}'.format(self.k, self.q)
 
@@ -35,14 +36,15 @@ class GMM:
         self.mu = np.zeros((self.k, self._d))
         self.W = np.random.randn(self.k, self._d, self.q)
         self.phi = np.random.rand(self.k) + self.__prec
+        self.__update_M()
         self._inited = True
 
     def __update_M(self):
         self.M = np.linalg.inv(
-            self.__transp(self.W) @ self.W + self.phi[:, None] * np.eye(self.q)[None, :, :]
+            self._transp(self.W) @ self.W + (self.phi[:, None, None] + self.__prec) * np.eye(self.q)[None, :, :]
         )
 
-    def __transp(self, mat: np.ndarray) -> np.ndarray:
+    def _transp(self, mat: np.ndarray) -> np.ndarray:
         return mat.transpose((0, 2, 1))
 
     def __check_reshape_X(self, X: np.ndarray):
@@ -52,8 +54,8 @@ class GMM:
 
     def responsibilities(self, X: np.ndarray, log: bool=False, save_mem: bool=False) -> np.ndarray:
         assert self._inited
-        X = self.__check_reshape_X(X)
-        res = np.log(self.mix) - 0.5*(self.mahalanobis(X, save_mem=save_mem) + self.logdet())
+        if self.__reshape: X = self.__check_reshape_X(X)
+        res = np.log(self.mix[:, None]) - 0.5*(self.mahalanobis(X, save_mem=save_mem) + self.logdet()[:, None])
         res = res - logsumexp(res, axis=0)[None, :]
         return res if log else np.exp(res)
 
@@ -66,7 +68,7 @@ class GMM:
         :return: a numpy array with shape [#clusters, # samples] of the distances of each sample from each cluster
         """
         assert self._inited
-        X = self.__check_reshape_X(X)
+        if self.__reshape: X = self.__check_reshape_X(X)
         if not save_mem:
             meaned = X[None, :] - self.mu[:, None, :]
             dist = np.sum(meaned*meaned, axis=2)
@@ -82,7 +84,8 @@ class GMM:
             return maha
 
     def logdet(self) -> np.ndarray:
-        return self._d*np.log(self.phi[:, None, None]) - np.log(self.M)
+        _, det = np.linalg.slogdet(self.M + np.eye(self.q)[None, ...]*self.__prec)
+        return self._d*np.log(self.phi) - det
 
     def fit(self, X: np.ndarray, iterations: int=10, verbose: bool=True, save_mem: bool=False):
         """
@@ -92,40 +95,43 @@ class GMM:
         :param verbose: whether progress should be printed or not
         :return: the trained model
         """
-        if not self._inited:
-            self.init(X.shape[1:])
-        X = self.__check_reshape_X(X)
+        if not self._inited: self.init(X.shape[1:])
+        if self.__reshape: X = self.__check_reshape_X(X)
 
         if verbose: print('Fitting a pPCAMM model to {} samples with {} clusters, for {} iterations:'
                           .format(X.shape[0], self.k, iterations), flush=True)
         for _ in tqdm.tqdm(range(iterations), disable=not verbose):
             res = self.responsibilities(X, log=True, save_mem=save_mem)
-            norm = np.exp(logsumexp(res, axis=1))
+            norm = np.maximum(np.exp(logsumexp(res, axis=1)), self.__prec)
             res = np.exp(res)
 
             self.mix = np.maximum(np.sum(res, axis=1)/X.shape[0], self.__prec)
             self.mix = self.mix / np.sum(self.mix)
 
             if not save_mem:
-                self.mu = np.sum(res[..., None] *
-                                 (self.__transp(X[None, :, :]) -
-                                  self.M@self.__transp(self.W)@(self.__transp(X[None, :, :])-self.mu[:, :, None])),
-                                 axis=2) / norm
+                self.mu = np.sum(res[:, None, :] *
+                                 (self._transp(X[None, :, :]) -
+                                  self.W @ self.M @ self._transp(self.W) @
+                                  (self._transp(X[None, :, :]) - self.mu[:, :, None])),
+                                 axis=2) / norm[:, None]
+
                 meaned = X[None, :] - self.mu[:, None, :]
-                cov = ((res[:, :, None] * (self.__transp(meaned))) @ (meaned @ self.W))/norm[:, None]
-                self.W = cov @ np.linalg.inv(self.M @ self.__transp(self.W) @ cov +
-                                             np.eye(self.q)[None, :, :]*self.phi[:, None])
-                self.phi = (np.sum((res[:, :, None] * meaned @ self.__transp(meaned)) /norm[:, None], axis=1) - \
-                            np.sum(self.__transp(self.W) * (cov @ self.M), axis=(1, 2))) / self._d
+                cov = ((res[:, None, :] * (self._transp(meaned))) @ (meaned @ self.W)) / norm[:, None, None]
+                self.W = cov @ np.linalg.inv(self.M @ self._transp(self.W) @ cov +
+                                             np.eye(self.q)[None, :, :] * self.phi[:, None, None])
+
+                self.phi = np.sum((res[:, :, None] * meaned * meaned) / norm[:, None, None], axis=(1, 2)) - \
+                           np.sum(self.W * (cov @ self.M), axis=(1, 2)) / self._d
             else:
                 for k in range(self.k):
-                    self.mu[k] = np.sum(res[k, :, None] * (X.T - self.M[k] @ self.W[k].T @ (X.T - self.mu[k, :, None])),
+                    self.mu[k] = np.sum(res[k, None, :] *
+                                        (X.T - self.W[k] @ self.M[k] @ self.W[k].T @ (X.T - self.mu[k, :, None])),
                                         axis=1) / norm[k]
                     meaned = X - self.mu[k, None, :]
-                    cov = ((res[k, :, None] * meaned.T) @ (meaned @ self.W[k])) / norm[k, None]
+                    cov = ((res[k, None, :] * meaned.T) @ (meaned @ self.W[k])) / norm[k, None]
                     self.W[k] = cov @ np.linalg.inv(self.M[k] @ self.W[k].T @ cov + np.eye(self.q)*self.phi[k])
-                    self.phi[k] = (np.sum(meaned.T @ (res * meaned))/norm[k] - \
-                                   np.sum(self.W[k].T * (cov @ self.M[k]))) / self._d
+                    self.phi[k] = np.sum(meaned * (res[k, :, None] * meaned)/norm[k]) - \
+                                  np.sum(self.W[k] * (cov @ self.M[k])) / self._d
             self.__update_M()
             self.phi = np.maximum(self.phi, self.__prec)
 
@@ -162,17 +168,42 @@ class GMM:
                          0.5*(self.mahalanobis(X, save_mem=save_mem) + self.logdet()), axis=0)
 
     def predict(self, X: np.ndarray, save_mem: bool=False):
-        X = self.__check_reshape_X(X)
+        if self.__reshape: X = self.__check_reshape_X(X)
         assert self._trained, "Model must be trained before predicting labels"
         inds = np.argmax(self.predict_log_proba(X, save_mem=save_mem), axis=0)
         return [i for i in inds]
 
     def predict_proba(self, X: np.ndarray, save_mem: bool=False):
-        X = self.__check_reshape_X(X)
+        if self.__reshape: X = self.__check_reshape_X(X)
         assert self._trained, "Model must be trained before predicting probabilities"
         return np.exp(self.predict_log_proba(X, save_mem=save_mem))
 
     def predict_log_proba(self, X: np.ndarray, save_mem: bool=False):
-        X = self.__check_reshape_X(X)
+        if self.__reshape: X = self.__check_reshape_X(X)
         assert self._trained, "Model must be trained before predicting log-probabilities"
         return self.responsibilities(X, log=True, save_mem=save_mem)
+
+
+if __name__ == '__main__':
+    import timeit
+    k, N = 10, 2500
+    data = np.random.rand(N, 100)
+    reps, nums = 5, 10
+
+    print('.'*reps*nums)
+
+    def func():
+        print('.', flush=True, end='')
+        mdl = pPCAMM(k)
+        mdl.fit(data, verbose=False)
+    print('Timing no mem_save')
+    timer = timeit.Timer(func).repeat(reps, nums)
+    print('\nNo mem_save, min time was: {:.2f} sec'.format(np.min(timer)/reps))
+
+    def func():
+        print('.', flush=True, end='')
+        mdl = pPCAMM(k)
+        mdl.fit(data, save_mem=True, verbose=False)
+    print('Timing mem_save')
+    timer = timeit.Timer(func).repeat(reps, nums)
+    print('\nWith mem_save, min time was: {:.2f} sec'.format(np.min(timer)/reps))

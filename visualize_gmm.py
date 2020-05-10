@@ -1,11 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 import matplotlib.animation as manimation
 from matplotlib.patches import Ellipse
 from matplotlib.axes._axes import _log as matplotlib_axes_logger
-matplotlib_axes_logger.setLevel('ERROR')
 import argparse
 from models.GMM import GMM
+matplotlib_axes_logger.setLevel('ERROR')
 
 parser = argparse.ArgumentParser(description='Visualizes how a GMM converges and how it is trained')
 
@@ -115,10 +116,10 @@ writer = FFMpegWriter(fps=args.fps, metadata=metadata)
 # write frames
 fig = plt.figure()
 with writer.saving(fig, args.save_path, 100):
-    for i in range(its):
+    pbar = tqdm(range(its))
+    for i in pbar:
         gmm = gmm.fit(X, iterations=1, verbose=False)
-        if args.print_ll: print("The average log-likelihood for iteration {}/{} was {:.3f}"
-                                .format(i+1, its, np.mean(gmm.log_likelihood(X))), flush=True)
+        if args.print_ll: pbar.set_postfix_str("log-likelihood: {:.3f}".format(np.mean(gmm.log_likelihood(X))))
         plt.clf()
         create_frame(i)
         writer.grab_frame()

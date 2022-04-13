@@ -1,7 +1,7 @@
 # Gaussian Mixture Models
 Gaussian Mixture Models (GMMs for short) are statistical models that are commenly used for clustering. In GMMs we assume that the datapoints we are trying to learn originated from a mixture of Gaussian distributions (hence the name). A GMM distribution can, in general, be very complex ([try and play around with this example](https://www.desmos.com/calculator/syrzk1wint)), but can be broken down into multiple _simple_ components; a number of Gaussian distributions.
 
-GMMs are typically trained using the Expectation Maximization (EM) algorithm - you can read about that in more details [in this comprehensive blog post](http://bjlkeng.github.io/posts/the-expectation-maximization-algorithm/). The whole point of this repository is to try and make the whole optimization process a bit more intuitive.
+GMMs are typically trained using the Expectation Maximization (EM) algorithm - you can read about that in more details [in this comprehensive blog post](http://bjlkeng.github.io/posts/the-expectation-maximization-algorithm/) or in this [summary I wrote](https://github.com/friedmanroy/GMM-visualizations/blob/master/Summary.pdf). The whole point of this repository is to try and make the whole optimization process a bit more intuitive.
 
 ## Simple GMM Visualization
 To begin with, let's vizualize how a GMM is fitted to 2D points.
